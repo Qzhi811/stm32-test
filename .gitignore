@@ -1,0 +1,15 @@
+Listings/
+Objects/
+*.uvguix.*
+*.uvgui.*
+*.build_log.htm
+*.dep
+*.crf
+*.d
+*.o
+*.axf
+*.htm
+*.lnp
+*.sct
+*.map
+*.lst
