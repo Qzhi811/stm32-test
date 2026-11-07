@@ -1,0 +1,64 @@
+/* =====================================================================
+ * 电控组最后一次作业：底盘 CAN 发送数据函数
+ * 说明：类比课上云台 gimbal 的发送函数，编写底盘 4 个电机的发送函数。
+ *       标准帧格式，DLC = 8（4 个电机 × 每个电机 2 字节 = 8 字节）。
+ *       所有用到的变量都单独定义，每一行都写了注释。
+ * ===================================================================== */
+
+/* ---------------------- 一、先定义要用到的变量 ---------------------- */
+
+static CAN_TxHeaderTypeDef chassis_tx_message;   /* 定义 CAN 发送报文头结构体变量 chassis_tx_message，用来存放这一帧的 ID、帧类型、长度等信息 */
+static uint8_t chassis_can_send_data[8];         /* 定义长度为 8 字节的发送数据缓冲区 chassis_can_send_data，正好装 4 个电机的数据 */
+static uint32_t send_mail_box;                   /* 定义邮箱变量 send_mail_box，用来接收 HAL 库返回的、这一帧被放进了哪个硬件发送邮箱 */
+
+
+/* ---------------------- 二、底盘发送函数 ---------------------- */
+
+/**
+  * @brief  向底盘 4 个电机发送控制数据
+  * @param  motor1  1 号电机目标值（int16_t，范围 -32768~32767）
+  * @param  motor2  2 号电机目标值（int16_t，范围 -32768~32767）
+  * @param  motor3  3 号电机目标值（int16_t，范围 -32768~32767）
+  * @param  motor4  4 号电机目标值（int16_t，范围 -32768~32767）
+  * @retval 无
+  */
+void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4)
+{
+    /* ---------- 第 1 步：配置报文头（标准帧 / 数据帧 / DLC=8） ---------- */
+
+    chassis_tx_message.StdId = CHASSIS_CAN_ID;              /* 设置标准帧 ID 为底盘电机控制 ID（例如 0x200），标识这一帧发给底盘 4 个电机 */
+    chassis_tx_message.ExtId = 0;                            /* 标准帧不使用扩展 ID，这里清 0 */
+    chassis_tx_message.IDE   = CAN_ID_STD;                   /* 选择标准帧格式（IDE = CAN_ID_STD），即 11 位 ID 的标准帧 */
+    chassis_tx_message.RTR   = CAN_RTR_DATA;                 /* 选择数据帧（RTR = CAN_RTR_DATA），表示这一帧是发数据的，不是远程请求帧 */
+    chassis_tx_message.DLC   = 8;                            /* 设置数据长度为 8 字节，正好是 4 个电机 × 2 字节 */
+    chassis_tx_message.TransmitGlobalTime = DISABLE;         /* 关闭时间戳功能，普通控制报文不需要 */
+
+    /* ---------- 第 2 步：把 4 个电机数据按高字节在前拆进缓冲区 ---------- */
+
+    chassis_can_send_data[0] = (motor1 >> 8) & 0xFF;         /* 取出 motor1 的高 8 位，放到缓冲区第 0 个字节 */
+    chassis_can_send_data[1] =  motor1       & 0xFF;         /* 取出 motor1 的低 8 位，放到缓冲区第 1 个字节 */
+
+    chassis_can_send_data[2] = (motor2 >> 8) & 0xFF;         /* 取出 motor2 的高 8 位，放到缓冲区第 2 个字节 */
+    chassis_can_send_data[3] =  motor2       & 0xFF;         /* 取出 motor2 的低 8 位，放到缓冲区第 3 个字节 */
+
+    chassis_can_send_data[4] = (motor3 >> 8) & 0xFF;         /* 取出 motor3 的高 8 位，放到缓冲区第 4 个字节 */
+    chassis_can_send_data[5] =  motor3       & 0xFF;         /* 取出 motor3 的低 8 位，放到缓冲区第 5 个字节 */
+
+    chassis_can_send_data[6] = (motor4 >> 8) & 0xFF;         /* 取出 motor4 的高 8 位，放到缓冲区第 6 个字节 */
+    chassis_can_send_data[7] =  motor4       & 0xFF;         /* 取出 motor4 的低 8 位，放到缓冲区第 7 个字节 */
+
+    /* ---------- 第 3 步：调用 HAL 库把这一帧真正丢进 CAN 发送邮箱 ---------- */
+
+    HAL_CAN_AddTxMessage(&hcan1, &chassis_tx_message, chassis_can_send_data, &send_mail_box);
+    /* 上面这一行：把配置好的报文头、8 字节数据一起交给 CAN1 外设发送出去，
+       发送成功后，HAL 库会把占用的邮箱编号写回 send_mail_box 变量 */
+}
+
+/* =====================================================================
+ * 说明补充（不用写进 txt 也可以，交作业时保留这段更清楚）：
+ * 1. CHASSIS_CAN_ID 需要提前在头文件里宏定义，例如：
+ *        #define CHASSIS_CAN_ID   0x200
+ *    如果战队用的是 hcan2，把上面的 &hcan1 改成 &hcan2 即可。
+ * 2. 4 个电机 × 2 字节 = 8 字节，正好填满一帧 CAN 数据，所以 DLC = 8。
+ * 3. 高字节在前（motorX >> 8 先发），是 DJI 电机 C620/C610 电调的通用数据格式。
+ * ===================================================================== */
